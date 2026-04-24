@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Race: AI Overdrive</title>
+    <style>
+        :root {
+            --bg-color: #020205;
+            --neon-blue: #00f2ff;
+            --neon-pink: #ff00ea;
+            --neon-green: #39ff14;
+            --neon-yellow: #fff000;
+            --neon-purple: #bc13fe;
+            --neon-red: #ff3131;
+            --board-size: 500px;
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto+Mono:wght@700&display=swap');
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Orbitron', sans-serif; }
+
+        body {
+            background-color: var(--bg-color);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .stat-card {
+            flex: 1;
+            min-width: 150px;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            border: 2px solid rgba(255,255,255,0.1);
+            background: rgba(25, 25, 50, 0.8);
+            transition: all 0.3s ease;
+            opacity: 0.4;
+        }
+
+        .stat-card.active-pilot {
+            opacity: 1;
+            transform: translateY(-5px);
+            box-shadow: 0 0 15px currentColor;
+            border-width: 3px;
+        }
+
+        #setup-screen {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle, #0a0a1f 0%, #020205 100%);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .setup-card {
+            background: #11111d;
+            padding: 40px;
+            border: 2px solid var(--neon-blue);
+            border-radius: 20px;
+            box-shadow: 0 0 30px var(--neon-blue);
+            text-align: center;
+        }
+
+        .setup-card input {
+            display: block; margin: 10px auto; padding: 10px;
+            background: #000; border: 1px solid var(--neon-blue);
+            color: white; text-align: center; width: 200px;
+        }
+
+        .stats-container {
+            display: flex; width: 100%; max-width: 900px;
+            gap: 15px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center;
+        }
+
+        .game-layout {
+            display: flex; flex-wrap: wrap; justify-content: center; gap: 30px; max-width: 1300px;
+        }
+
+        .board-wrapper {
+            position: relative; width: var(--board-size); height: var(--board-size);
+            background: #050510; border: 4px solid #1a1a3a;
+            box-shadow: 0 0 50px rgba(0, 242, 255, 0.1);
+        }
+
+        .grid {
+            display: grid; grid-template-columns: repeat(10, 1fr);
+            grid-template-rows: repeat(10, 1fr); width: 100%; height: 100%;
+        }
+
+        .tile {
+            position: relative; border: 1px solid rgba(0, 242, 255, 0.05);
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(26, 26, 46, 0.4);
+            transition: all 0.4s ease;
+        }
+
+        .tile-num { position: absolute; top: 2px; right: 3px; font-size: 8px; color: rgba(0, 242, 255, 0.4); }
+        .tile-blackhole { box-shadow: inset 0 0 15px var(--neon-purple); }
+        .tile-danger { background: rgba(255, 49, 49, 0.15); box-shadow: inset 0 0 20px var(--neon-red); }
+
+        .player {
+            position: absolute; width: 24px; height: 24px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 800; z-index: 100;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 2px solid #fff; color: #000;
+        }
+
+        /* SHUFFLE ANIMATION */
+        @keyframes shuffle-blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; background: var(--neon-blue); }
+            100% { opacity: 1; }
+        }
+        .shuffle-active { animation: shuffle-blink 0.6s ease-in-out; }
+
+        .critical-fuel { animation: fuel-alert 0.8s infinite; color: var(--neon-red) !important; text-shadow: 0 0 10px var(--neon-red); }
+        @keyframes fuel-alert { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        .mission-protocol {
+            width: 320px; background: #0a0a0f; border: 1px solid #333;
+            padding: 20px; border-radius: 12px;
+        }
+
+        .legend-table { width: 100%; font-size: 11px; margin: 15px 0; border-collapse: collapse; }
+        .legend-table td { padding: 6px; border-bottom: 1px solid #1a1a1a; }
+
+        .log-display {
+            background: #000; padding: 12px; min-height: 70px; color: #0f0;
+            font-family: 'Roboto Mono', monospace; font-size: 11px;
+            margin-top: 10px; border-left: 3px solid var(--neon-green);
+        }
+
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; z-index: 9999;
+        }
+
+        .modal {
+            background: #0a0a1a; border: 2px solid var(--neon-blue);
+            padding: 30px; text-align: center; border-radius: 20px;
+        }
+
+        .roll-btn {
+            background: var(--neon-green); padding: 15px 40px; font-weight: 900;
+            border-radius: 4px; cursor: pointer; border: none; text-transform: uppercase;
+        }
+
+        button:disabled { background: #333; color: #666; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <div id="setup-screen">
+        <div class="setup-card">
+            <h2 style="color: var(--neon-blue); margin-bottom: 10px;">AI OVERDRIVE SYSTEM</h2>
+            <p style="font-size: 12px; color: #888; margin-bottom: 25px;">MARS MISSION 2026</p>
+            <p>Select Fleet Size:</p>
+            <select id="player-count" style="padding: 8px; margin: 15px; width: 200px; background: #000; color: white; border: 1px solid var(--neon-blue);">
+                <option value="2">2 Pilots</option>
+                <option value="3">3 Pilots</option>
+                <option value="4">4 Pilots</option>
+            </select>
+            <div id="name-inputs">
+                <input type="text" id="p1-name" placeholder="Pilot Alpha" value="ALPHA">
+                <input type="text" id="p2-name" placeholder="Pilot Bravo" value="BRAVO">
+                <input type="text" id="p3-name" placeholder="Pilot Charlie" value="CHARLIE" style="display:none;">
+                <input type="text" id="p4-name" placeholder="Pilot Delta" value="DELTA" style="display:none;">
+            </div>
+            <button onclick="startGame()" class="roll-btn" style="margin-top:20px;">INITIATE LAUNCH</button>
+        </div>
+    </div>
+
+    <div class="stats-container" id="stats-area"></div>
+
+    <div class="game-layout">
+        <div class="board-wrapper" id="board-wrap">
+            <div class="grid" id="grid"></div>
+            <div id="player-markers"></div>
+        </div>
+
+        <div class="mission-protocol">
+            <h3 style="color:var(--neon-yellow); text-align:center; font-size: 14px;">LEGEND & HAZARDS</h3>
+            <table class="legend-table">
+                <tr><td>🚀 Rocket</td><td>Wormhole (Forward)</td></tr>
+                <tr><td>☄️ Comet</td><td>Gravity Well (Backward)</td></tr>
+                <tr><td>🌀 Vortex</td><td>Black Hole (Hazard)</td></tr>
+                <tr><td>⛽ Fuel</td><td>Refill Cache (+30%)</td></tr>
+                <tr><td>🛡️ Haven</td><td>Safe Haven (100% Reset)</td></tr>
+                <tr><td>☢️ Loop</td><td>Time Loop (Reset to 10)</td></tr>
+            </table>
+            <div id="log-display" class="log-display">SYSTEM STANDBY...</div>
+            <div style="text-align:center;">
+                <div id="dice" style="font-size: 60px; color: var(--neon-yellow); margin: 10px 0;">⚀</div>
+                <button id="roll-btn" class="roll-btn">BURN ENGINES</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="modal-overlay">
+        <div class="modal">
+            <h3 style="color: var(--neon-blue);">AI OVERRIDE SYSTEM</h3>
+            <p style="font-size: 0.9rem; margin: 20px 0; color: #ccc;">Hazard detected! Engage Override? <br><span style="color: var(--neon-pink); font-size: 0.8rem;">(Cost: 1 AI Charge + 15% Fuel)</span></p>
+            <button onclick="resolveAI(true)" style="background: var(--neon-green); padding: 12px 25px; border:none; cursor:pointer; font-weight:bold; margin-right:10px;">ENGAGE</button>
+            <button onclick="resolveAI(false)" style="background: #444; padding: 12px 25px; border:none; color:white; cursor:pointer; font-weight:bold;">BYPASS</button>
+        </div>
+    </div>
+
+    <script>
+        const colors = ['#00f2ff', '#ff00ea', '#39ff14', '#fff000'];
+        let players = [];
+        let currentPlayerIdx = 0;
+        let isMoving = false;
+        let aiPromiseResolver = null;
+        let turnCounter = 0; // Tracks turns for the 3-round shuffle
+
+        // Positions setup
+        let portals = { 4:25, 13:46, 33:49, 50:69, 62:81, 74:92, 27:5, 40:20, 54:31, 66:45, 89:68, 99:10 };
+        let fuelCaches = [15, 38, 77];
+        let blackHoles = [22, 53, 85];
+        const safeHaven = 60;
+
+        document.getElementById('player-count').addEventListener('change', (e) => {
+            const count = parseInt(e.target.value);
+            for(let i=1; i<=4; i++) document.getElementById(`p${i}-name`).style.display = i <= count ? 'block' : 'none';
+        });
+
+        function startGame() {
+            const count = parseInt(document.getElementById('player-count').value);
+            players = [];
+            const statsArea = document.getElementById('stats-area');
+            const markerArea = document.getElementById('player-markers');
+            statsArea.innerHTML = markerArea.innerHTML = '';
+
+            for (let i = 0; i < count; i++) {
+                const name = document.getElementById(`p${i+1}-name`).value || `Pilot ${i+1}`;
+                players.push({ id: i + 1, name: name, pos: 1, fuel: 100, ai: 2, color: colors[i] });
+                statsArea.innerHTML += `
+                    <div class="stat-card" id="stat-p${i+1}" style="color: ${colors[i]}; border-color: ${colors[i]}">
+                        <span style="font-size: 14px;">${name.toUpperCase()}</span><br>
+                        FUEL: <span id="p${i+1}-fuel">100</span>% | AI: <span id="p${i+1}-ai">2</span>
+                    </div>
+                `;
+                const marker = document.createElement('div');
+                marker.id = `marker-p${i+1}`; marker.className = 'player';
+                marker.style.background = colors[i]; marker.innerText = i + 1;
+                markerArea.appendChild(marker);
+            }
+            document.getElementById('setup-screen').style.display = 'none';
+            createBoard(); updateUI(); updateMarkers();
+        }
+
+        // CRITICAL FIX: Separation of icon rendering
+        function getTileContent(n) {
+            let content = `<span class="tile-num">${n}</span>`;
+            if (n === 1) content += `🌍`;
+            if (n === 100) content += `🏁`;
+            if (fuelCaches.includes(n)) content += `⛽`;
+            if (blackHoles.includes(n)) content += `🌀`;
+            if (n === 99) content += `☢️`;
+            if (n === safeHaven) content += `🛡️`;
+            if (portals[n] && n !== 99) content += (portals[n] > n ? '🚀' : '☄️');
+            return content;
+        }
+
+        function createBoard() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            for (let r = 9; r >= 0; r--) {
+                let row = [];
+                for (let c = 0; c < 10; c++) row.push((r % 2 === 0) ? (r * 10) + (c + 1) : (r * 10) + (10 - c));
+                row.forEach(n => {
+                    const tile = document.createElement('div');
+                    tile.className = 'tile'; tile.id = `tile-${n}`;
+                    tile.innerHTML = getTileContent(n);
+                    if (blackHoles.includes(n)) tile.classList.add('tile-blackhole');
+                    if (n === 99) tile.classList.add('tile-danger');
+                    grid.appendChild(tile);
+                });
+            }
+        }
+
+        // NEW: FUNCTION TO SHUFFLE AND UPDATE VISUALS
+        function shuffleAnomalies() {
+            updateLog("⚠️ SHUFFLE DETECTED: Recalculating anomalies...");
+            document.getElementById('board-wrap').classList.add('shuffle-active');
+            setTimeout(() => document.getElementById('board-wrap').classList.remove('shuffle-active'), 600);
+
+            // Generate random positions (avoiding 1, 100, and current player positions ideally)
+            const getRand = () => Math.floor(Math.random() * 90) + 5;
+            
+            // New Portals
+            portals = { 99: 10 };
+            for(let i=0; i<6; i++) {
+                let start = getRand();
+                portals[start] = Math.min(100, start + 15); // Rockets
+                let start2 = getRand();
+                portals[start2] = Math.max(1, start2 - 12); // Comets
+            }
+
+            // New Caches & Holes
+            fuelCaches = [getRand(), getRand(), getRand()];
+            blackHoles = [getRand(), getRand(), getRand()];
+
+            // Update Board Visuals
+            for(let i=1; i<=100; i++) {
+                const tile = document.getElementById(`tile-${i}`);
+                tile.innerHTML = getTileContent(i);
+                tile.classList.remove('tile-blackhole', 'tile-danger');
+                if (blackHoles.includes(i)) tile.classList.add('tile-blackhole');
+                if (i === 99) tile.classList.add('tile-danger');
+            }
+        }
+
+        function updateLog(msg) {
+            const p = players[currentPlayerIdx];
+            document.getElementById('log-display').innerHTML = `<span style="color:${p.color}">[${p.name}]</span>: ${msg}`;
+        }
+
+        async function handleMove(roll) {
+            isMoving = true;
+            document.getElementById('roll-btn').disabled = true;
+            let p = players[currentPlayerIdx];
+
+            if (p.fuel <= 0) {
+                updateLog("FUEL DEPLETED! Skipping turn for emergency recharge.");
+                p.fuel = 20;
+                updateUI(); await new Promise(r => setTimeout(r, 1500));
+                endTurn(); return;
+            }
+            
+            if (p.pos + roll > 100) {
+                updateLog("Orbit overshoot! Need exact roll.");
+                await new Promise(r => setTimeout(r, 1000));
+            } else {
+                updateLog(`Burning ${roll}% fuel...`);
+                p.fuel -= roll; updateUI();
+                let target = p.pos + roll;
+                while (p.pos < target) {
+                    p.pos++; updateMarkers();
+                    await new Promise(r => setTimeout(r, 150));
+                }
+                await checkLanding(p);
+            }
+            
+            if (p.pos === 100) { updateLog("MISSION COMPLETE!"); return; }
+            endTurn();
+        }
+
+        function endTurn() {
+            turnCounter++;
+            // If all players have played their turn 3 times
+            if (turnCounter >= (players.length * 3)) {
+                shuffleAnomalies();
+                turnCounter = 0;
+            }
+
+            currentPlayerIdx = (currentPlayerIdx + 1) % players.length;
+            updateUI(); document.getElementById('roll-btn').disabled = false;
+            isMoving = false;
+        }
+
+        async function checkLanding(p) {
+            const n = p.pos;
+            const isHazard = blackHoles.includes(n) || n === 99 || (portals[n] && portals[n] < n);
+
+            if (isHazard) {
+                if (p.ai > 0 && p.fuel >= 15) {
+                    document.getElementById('modal-overlay').style.display = 'flex';
+                    const useAI = await new Promise(res => aiPromiseResolver = res);
+                    document.getElementById('modal-overlay').style.display = 'none';
+                    
+                    if (useAI) {
+                        p.ai--; p.fuel -= 15;
+                        updateLog("AI OVERRIDE: Hazard avoided!");
+                        updateUI(); return;
+                    }
+                }
+                
+                if (blackHoles.includes(n)) {
+                    updateLog("Vortex Pull! -5 sectors."); p.pos = Math.max(1, p.pos - 5);
+                } else if (n === 99) {
+                    updateLog("Time Loop! Reset to 10."); p.pos = 10;
+                } else if (portals[n] && portals[n] < n) {
+                    updateLog("Gravity Well! Falling back."); p.pos = portals[n];
+                }
+            } else if (portals[n] && portals[n] > n) {
+                updateLog("Wormhole boost!"); p.pos = portals[n];
+            } else if (fuelCaches.includes(n)) {
+                updateLog("Refuel cache found (+30%)."); p.fuel = Math.min(100, p.fuel + 30);
+            } else if (n === safeHaven) {
+                updateLog("Safe Haven: Fuel 100%."); p.fuel = 100;
+            }
+            updateMarkers(); updateUI();
+        }
+
+        window.resolveAI = (val) => aiPromiseResolver(val);
+
+        function updateUI() {
+            players.forEach((p, index) => {
+                const fuelEl = document.getElementById(`p${p.id}-fuel`);
+                const cardEl = document.getElementById(`stat-p${p.id}`);
+                fuelEl.innerText = Math.max(0, Math.floor(p.fuel));
+                document.getElementById(`p${p.id}-ai`).innerText = p.ai;
+                if (p.fuel < 30) fuelEl.className = "critical-fuel";
+                else fuelEl.className = "";
+                cardEl.classList.toggle('active-pilot', index === currentPlayerIdx);
+            });
+        }
+
+        function updateMarkers() {
+            players.forEach(p => {
+                const tile = document.getElementById(`tile-${p.pos}`);
+                const marker = document.getElementById(`marker-p${p.id}`);
+                const offset = (p.id - 1) * 4;
+                marker.style.left = `${tile.offsetLeft + 4 + offset}px`;
+                marker.style.top = `${tile.offsetTop + 4 + offset}px`;
+            });
+        }
+
+        document.getElementById('roll-btn').addEventListener('click', () => {
+            if (isMoving) return;
+            const roll = Math.floor(Math.random() * 6) + 1;
+            document.getElementById('dice').innerText = ['⚀','⚁','⚂','⚃','⚄','⚅'][roll-1];
+            handleMove(roll);
+        });
+    </script>
+</body>
+</html>
